@@ -48,7 +48,10 @@ def create_brightest_index(root_dir, relative_key, output_csv):
                     "Mag": starcounts['MAG_AUTO'][0],
                     "Mag_Error": starcounts['MAGERR_AUTO'][0],
                     "Flux": starcounts['FLUX_AUTO'][0],
-                    "Flux_Error": starcounts['FLUXERR_AUTO'][0]
+                    "Flux_Error": starcounts['FLUXERR_AUTO'][0],
+                    "CXX": starcounts['CXX_IMAGE'][0],
+                    "CXY": starcounts['CXY_IMAGE'][0],
+                    "CYY":starcounts['CYY_IMAGE'][0],
                     }
             data_dict.append(info)
 
