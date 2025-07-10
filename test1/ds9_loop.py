@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import sys, os, glob
 import argparse
 import pandas as pd
@@ -48,7 +50,7 @@ def define_args():
 #ellipse(186.8194200,9.4313379,10.000",30.000",44.999994) # color=red width=4
 #ellipse(RA, Dec, minor axis lenght, major axis length, Poisition Angle PA in deg)
 def make_region_command_for_position(ra,dec,position_angle,major_axis,minor_axis,name=None,symbol='circle',color='red',width=4,size='10"'):
-    print(f'Making region command: RA_Galaxy {ra}, Dec_Galaxy {dec}, name {name}, Position_Angle {position_angle}, Major_Axis {major_axis}, Minor_Axis {minor_axis}')
+    print(f'\nMaking region command: RA_Galaxy {ra}, Dec_Galaxy {dec}, name {name}, Position_Angle {position_angle}, Major_Axis {major_axis}, Minor_Axis {minor_axis}')
     name='{'+f'{name}'+'}'
     s = f'circle({ra},{dec},{size},{position_angle},{major_axis},{minor_axis}) # color={color} width={width} text={name}'
     print(s)
@@ -85,42 +87,41 @@ def save_region_file(filepath, output):
 
 def combine_fs_and_bg(supernova_names, fits_summary, brightest_galaxy):
     for sn_name in supernova_names:
-            # print("SN name: ",sn_name)
+        # print("SN name: ",sn_name)
 
-            sn_ix_bg = brightest_galaxy[brightest_galaxy["SNID"] == sn_name].index.values
-            # print("Brightest galaxy indices: ",sn_ix_bg)
+        sn_ix_bg = brightest_galaxy[brightest_galaxy["SNID"] == sn_name].index.values
+        # print("Brightest galaxy indices: ",sn_ix_bg)
 
-            sn_ix = np.where(fits_summary["SNID"] == sn_name)[0]
-            # print("Fits summary indices: ",sn_ix)
+        sn_ix = np.where(fits_summary["SNID"] == sn_name)[0]
+        # print("Fits summary indices: ",sn_ix)
 
-            for index in sn_ix_bg:
-                filename = brightest_galaxy.loc[index,'File_key']
-                filename_ix_fs = sn_ix[np.where(fits_summary.loc[sn_ix, "filenameshort"] == filename+".fits")[0]]
+        for index in sn_ix_bg:
+            filename = brightest_galaxy.loc[index,'File_key']
+            filename_ix_fs = sn_ix[np.where(fits_summary.loc[sn_ix, "filenameshort"] == filename+".fits")[0]]
 
-                if len(filename_ix_fs)>1:
-                    raise RuntimeError(f"filename_ix_fs is returning multiple matches for filenameshort in fits_summary: {filename_ix_fs}")
+            if len(filename_ix_fs)>1:
+                raise RuntimeError(f"filename_ix_fs is returning multiple matches for filenameshort in fits_summary: {filename_ix_fs}")
 
-                for column_name in brightest_galaxy.columns:
-                    if column_name not in fits_summary.columns:
-                        fits_summary[column_name] = np.nan
-                    fits_summary.at[filename_ix_fs[0], column_name] = brightest_galaxy.at[index, column_name]
+            for column_name in brightest_galaxy.columns:
+                if column_name not in fits_summary.columns:
+                    fits_summary[column_name] = np.nan
+                fits_summary.at[filename_ix_fs[0], column_name] = brightest_galaxy.at[index, column_name]
+    return fits_summary
 
-    return(fits_summary)
-
-def get_region_command(index, fits_summary):
-    print("Index:", index)
-    print("Row: \n",fits_summary.iloc[[index]].to_string())
+def get_region_command(index, fits_summary, ra_galaxy, dec_galaxy):
+    # print("Index:", index)
+    # print("Row: \n",fits_summary.iloc[[index]].to_string())
 
     file_key = fits_summary.at[index, "File_key"]
     if isinstance(file_key, float) and np.isnan(file_key):
-        return None
+        return None, None, None
 
     if ra_galaxy is None or dec_galaxy is None:
         ra_galaxy = fits_summary.at[index, "RA_Galaxy"]
         dec_galaxy = fits_summary.at[index, "Dec_Galaxy"]
-        print(f"Setting RA and Dec: {ra_galaxy}, {dec_galaxy}")
+        # print(f"Setting RA and Dec: {ra_galaxy}, {dec_galaxy}")
     
-    print(f"RA and Dec: {ra_galaxy}, {dec_galaxy}")
+    # print(f"RA and Dec: {ra_galaxy}, {dec_galaxy}")
     
     # 1. Pixel-space covariance matrix
     cov_matrix = np.array([
@@ -138,23 +139,23 @@ def get_region_command(index, fits_summary):
 
     cmd = make_region_command_for_position(ra_galaxy, dec_galaxy, theta_deg, a_arcsec, b_arcsec, name=sn_name)
 
-    return cmd
+    return cmd, ra_galaxy, dec_galaxy
 
 if __name__ == "__main__":
     args = define_args()
     
     # pandas reads the table at the path args.fits_summary_path and then returns it to the variable fits_summary
     fits_summary = pd.read_table(args.fits_summary_path,sep=',')
-    print(fits_summary.to_string())
+    # print(fits_summary.to_string())
 
     # same thing -- reading table at args.brightest_galaxy_path and assigning it to brightest_galaxy variable
     brightest_galaxy = pd.read_table(args.brightest_galaxy_path,sep=',')
-    print(brightest_galaxy.to_string())
+    # print(brightest_galaxy.to_string())
 
     pd.set_option('display.max_colwidth', None)
     
     # receiving end: the "filenameshort" column in the fits_summary table
-    fits_summary['filenameshort'] = fits_summary['filename'].str.replace('.*\/','',regex=True)
+    fits_summary['filenameshort'] = fits_summary['filename'].str.replace(r'.*/', '', regex=True)
 
     # combines fits_summary and brightest_galaxy tables
     print("Combining fits_summary and brightest_galaxy tables...")
@@ -166,7 +167,7 @@ if __name__ == "__main__":
         os.mkdir(args.out_dir)
 
     for sn_name in args.supernova_names:
-        print("SN name: ",sn_name)
+        print("\nSN name: ",sn_name)
 
         sn_ix = np.where(fits_summary["SNID"] == sn_name)[0]
 
@@ -177,7 +178,9 @@ if __name__ == "__main__":
         all_output.append('fk5')
         
         for index in sn_ix:
-            cmd = get_region_command(index, fits_summary)
+            cmd, ra_galaxy, dec_galaxy = get_region_command(index, fits_summary, ra_galaxy, dec_galaxy)
+            if cmd is None:
+                continue
 
             # make region file
             output = ['global color=blue dashlist=8 3 width=1 font="helvetica 10 normal roman" select=1 highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 include=1 source=1']
